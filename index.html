@@ -1231,7 +1231,7 @@
         }
 
         /* ==========================================================================
-           10. RESPONSIVE DESIGN (DIKEMBALIKAN KE ASLI + FIX PADDING AMAN)
+           10. RESPONSIVE DESIGN (FIX MUTLAK UNTUK GITHUB PAGES / MOBILE BROWSER)
            ========================================================================== */
         @media (max-width: 850px) {
             body { 
@@ -1245,10 +1245,10 @@
                 padding: 0; 
                 border-right: none; 
                 border-top: 1px solid var(--glass-border); 
-                position: absolute; 
+                position: fixed; /* WAJIB FIXED agar tidak terpengaruh address bar */
                 bottom: 0; 
                 left: 0; 
-                z-index: 50; /* Dikembalikan ke aslinya */
+                z-index: 999; /* Z-index tertinggi agar selalu di atas */
                 background: rgba(5,5,17,0.9); 
                 backdrop-filter: var(--blur-heavy); 
             }
@@ -1282,19 +1282,19 @@
             }
             .chat-list-panel { 
                 width: 100%; 
-                height: calc(100vh - 70px); 
+                height: 100%; 
                 border-right: none; 
             }
             
-            /* FIX AMAN: Tambah padding-bottom 70px agar input box terdorong naik dan tidak tertutup Menu Bar */
+            /* KUNCI UTAMA FIX CHAT AREA */
             .chat-area { 
                 position: fixed; 
                 top: 0; 
                 left: 0; 
                 width: 100%; 
-                height: 100%; 
-                padding-bottom: 70px; /* <--- KUNCI PENYELESAIANNYA DI SINI */
-                z-index: 60; 
+                bottom: 70px; /* <--- PAKSA chat berhenti persis 70px dari bawah layar */
+                height: auto; /* <--- Abaikan height: 100% bawaan */
+                z-index: 900; /* <--- Berada tepat di bawah sidebar-nav */
                 transform: translateX(100%); 
                 transition: transform 0.3s; 
                 background: var(--bg-solid-mobile) !important; 
@@ -1309,8 +1309,15 @@
             .empty-chat { 
                 display: none !important; 
             }
+            
+            /* Amankan tab-content yang lain dengan metode yang sama */
             .tab-content { 
-                padding-bottom: 70px; 
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                bottom: 70px; 
+                height: auto;
             }
         }
     </style>

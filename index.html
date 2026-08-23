@@ -1005,7 +1005,6 @@
         /* ==========================================================================
            7. WEBVIEW CONTAINERS (TAMPILAN PRESISI DAN SIMETRIS DI TENGAH)
            ========================================================================== */
-        /* Kontainer Utama Pembungkus - Ini yang membuat selalu di tengah */
         .webview-container {
             display: flex;
             align-items: center;
@@ -1016,7 +1015,6 @@
             overflow-y: auto;
         }
 
-        /* Card Khusus yang Simetris */
         .webview-card {
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid var(--glass-border);
@@ -1051,13 +1049,12 @@
             margin-bottom: 30px; 
         }
 
-        /* Frame Native untuk Mode Mobile Build */
         .webview-frame { 
             width: 100%; 
             height: 100%; 
             border: none; 
             background: #fff; 
-            display: none; /* Disembunyikan saat di web browser standar */
+            display: none; 
         } 
 
         /* ==========================================================================
@@ -1454,7 +1451,6 @@
                             </div>
                         </div>
                         
-                        <!-- FIX: TAMBAH TOMBOL TELEPON BIASA DAN VIDEO -->
                         <div class="chat-header-actions">
                             <div class="action-btn" onclick="app.startCall('audio')" title="Panggilan Suara"><i class="fa-solid fa-phone"></i></div>
                             <div class="action-btn" onclick="app.startCall('video')" title="Panggilan Video"><i class="fa-solid fa-video"></i></div>
@@ -1647,10 +1643,33 @@
                 });
             `;
             const blob = new Blob([swCode], {type: 'application/javascript'});
+            // Catatan: Ini mungkin gagal (not supported) saat di localhost http biasa, ini normal.
             navigator.serviceWorker.register(URL.createObjectURL(blob)).then(reg => {
                 console.log('PWA Service Worker terdaftar.');
             }).catch(err => console.error('SW Error:', err));
         }
+
+        // --- TAMBAHAN KODE FACEBOOK SDK MULAI DI SINI ---
+        // Inisialisasi dijalankan secara Async
+        window.fbAsyncInit = function() {
+            FB.init({
+                appId      : 'MASUKKAN_APP_ID_FACEBOOK_KAMU_DI_SINI', // <--- PASTE APP ID KAMU DI SINI
+                cookie     : true,
+                xfbml      : true,
+                version    : 'v18.0'
+            });
+            console.log("Facebook SDK Berhasil Diinisialisasi");
+        };
+
+        // Memuat Script SDK Facebook
+        (function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) return;
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/id_ID/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+        // --- TAMBAHAN KODE FACEBOOK SDK SELESAI ---
 
         class NexusApp {
             constructor() {
@@ -1739,15 +1758,55 @@
             }
 
             async loginWithProvider(provider) {
-                const { data, error } = await this.supabase.auth.signInWithOAuth({ 
-                    provider: provider, 
-                    options: { 
-                        redirectTo: window.location.origin 
+                if (provider === 'facebook') {
+                    // PENGAMANAN: Pastikan SDK FB sudah termuat
+                    if (typeof FB === 'undefined') {
+                        alert('Script Facebook sedang dimuat atau diblokir. Pastikan koneksi internet lancar dan coba klik beberapa detik lagi.');
+                        return;
                     }
-                });
-                
-                if (error) {
-                    alert("Gagal login: " + error.message);
+
+                    // Panggil Pop-up Login FB
+                    FB.login((response) => {
+                        if (response.authResponse) {
+                            console.log('Berhasil terhubung dengan Facebook! Mengambil data...');
+                            
+                            // Mengambil Data Profil (Nama, Email, Foto)
+                            FB.api('/me', {fields: 'name,email,picture.type(large)'}, (userData) => {
+                                
+                                const email = userData.email || userData.id + "@facebook.com"; 
+                                const nama = userData.name;
+                                const avatar = userData.picture.data.url;
+                                
+                                // Masukkan ke sistem lokal kita
+                                localStorage.setItem('nexus_session', 'true');
+                                localStorage.setItem('nexus_role', 'user'); 
+                                localStorage.setItem('nexus_email', email);
+                                
+                                // Eksekusi masuk aplikasi
+                                this.enterApp(email, 'user');
+                                
+                                // Ganti foto profil di pojok kanan atas dan menu pengaturan
+                                document.getElementById('nav-my-avatar').src = avatar;
+                                document.getElementById('set-avatar-img').src = avatar;
+                                document.getElementById('set-name').value = nama;
+                                
+                            });
+                        } else {
+                            alert('Login Facebook dibatalkan atau gagal divalidasi oleh sistem Facebook.');
+                        }
+                    }, {scope: 'public_profile,email'}); 
+                } else {
+                    // Jalur Supabase untuk TikTok
+                    const { data, error } = await this.supabase.auth.signInWithOAuth({ 
+                        provider: provider, 
+                        options: { 
+                            redirectTo: window.location.origin 
+                        }
+                    });
+                    
+                    if (error) {
+                        alert("Gagal login: " + error.message);
+                    }
                 }
             }
 
@@ -1793,6 +1852,17 @@
             }
 
             logout() {
+                // Bersihkan token facebook jika login pakai facebook
+                if (typeof FB !== 'undefined') {
+                    FB.getLoginStatus(function(response) {
+                        if (response.status === 'connected') {
+                            FB.logout(function(response) {
+                                console.log('Facebook logged out.');
+                            });
+                        }
+                    });
+                }
+                
                 this.supabase.auth.signOut();
                 localStorage.clear();
                 window.location.reload();
@@ -1937,7 +2007,6 @@
                         <span>Sistem Komunikasi Terenkripsi</span>
                     </div>`;
                     
-                // Render mock message (contoh chat awal untuk di-translate)
                 if (user.id === 'client_01') {
                      this.appendMessageUI('received', user.msg, user.time);
                 }
@@ -1958,9 +2027,7 @@
 
             appendMessageUI(type, text, time) {
                 let translateBtn = '';
-                // Hanya memunculkan logo translate jika pesannya dari klien (received)
                 if(type === 'received') {
-                    // Escape petik tunggal untuk attribute onClick agar tidak error
                     let safeText = text.replace(/'/g, "\\'");
                     translateBtn = `<i class="fa-solid fa-language msg-translate-btn" onclick="app.translateText(this, '${safeText}')" title="Terjemahkan ke Indonesia"></i>`;
                 }
@@ -1977,7 +2044,6 @@
                     </div>`;
                 document.getElementById('message-container').insertAdjacentHTML('beforeend', bubbleHtml);
                 
-                // Auto scroll ke bawah
                 const chatContainer = document.getElementById('message-container');
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -2032,31 +2098,27 @@
                 }
             }
             
-            // FUNGSI TRANSLATE API GOOGLE (NO KEY REQUIRED - PUBLIC ENDPOINT)
             async translateText(element, rawText) {
                 try {
                     element.style.color = 'var(--accent-primary)';
                     element.classList.replace('fa-language', 'fa-spinner');
-                    element.classList.add('fa-spin'); // Efek loading
+                    element.classList.add('fa-spin'); 
 
                     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=id&dt=t&q=${encodeURIComponent(rawText)}`;
                     const response = await fetch(url);
                     const data = await response.json();
                     
-                    // Merangkai teks jika Google Translate memecahnya jadi array
                     let translatedText = '';
                     data[0].forEach(item => {
                         if(item[0]) translatedText += item[0];
                     });
 
-                    // Update UI Bubble Chat
                     const msgBubble = element.closest('.msg-bubble');
                     const textDiv = msgBubble.querySelector('.msg-text');
                     
-                    // Tampilkan bahasa asli dan terjemahannya (diselipkan garis pembatas)
                     textDiv.innerHTML = `${rawText}<br><hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:8px 0;"><i>${translatedText}</i>`;
                     
-                    element.style.display = 'none'; // Sembunyikan tombolnya kalau sudah sukses terjemah
+                    element.style.display = 'none'; 
                 } catch (error) {
                     console.error('Gagal Menerjemahkan:', error);
                     element.classList.replace('fa-spinner', 'fa-language');
@@ -2066,9 +2128,6 @@
                 }
             }
 
-            // ==========================================
-            // VIDEO & VOICE CALL WEBRTC DENGAN PILIHAN AUDIO SAJA
-            // ==========================================
             async startCall(type = 'video') {
                 if (!this.activeChatId) return;
                 
@@ -2077,7 +2136,6 @@
                 document.getElementById('call-status-text').innerText = type === 'audio' ? 'Memanggil Suara...' : 'Memanggil Video...';
                 
                 try {
-                    // Logika penentu: Jika audio saja, matikan video constraint
                     const mediaConstraints = { video: type === 'video', audio: true };
                     this.localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
                     
@@ -2085,7 +2143,7 @@
                         document.getElementById('local-video').style.display = 'block';
                         document.getElementById('local-video').srcObject = this.localStream;
                     } else {
-                        document.getElementById('local-video').style.display = 'none'; // Sembunyikan muka kita untuk voice call
+                        document.getElementById('local-video').style.display = 'none'; 
                     }
                     
                     this.pc = new RTCPeerConnection({ 
@@ -2102,10 +2160,9 @@
                             document.getElementById('remote-video').srcObject = event.streams[0];
                             document.getElementById('call-anim').style.display = 'none';
                         } else if (event.track.kind === 'audio' && type === 'audio') {
-                            // Untuk call audio, play audionya dari object remote-video tapi videonya hidden
                             document.getElementById('remote-video').style.display = 'none';
                             document.getElementById('remote-video').srcObject = event.streams[0];
-                            document.getElementById('call-anim').innerHTML = '<i class="fa-solid fa-volume-high"></i>'; // Ganti ikon animasi jadi speaker
+                            document.getElementById('call-anim').innerHTML = '<i class="fa-solid fa-volume-high"></i>'; 
                         }
                     };
 
